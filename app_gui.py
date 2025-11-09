@@ -19,58 +19,96 @@ else:
     print(f"Cảnh báo: Không tìm thấy Tesseract tại {tesseract_path}")
     print("Vui lòng cài đặt Tesseract OCR hoặc cập nhật đường dẫn trong code.")
 
-# --- Hàm làm sạch text: chỉ xuống dòng khi có dấu kết thúc câu ---
+# --- Hàm làm sạch text: chỉ xuống dòng khi hết câu VÀ ảnh gốc có line break ---
 def clean_text_format(text):
     """
-    Làm sạch text: chỉ xuống dòng khi có dấu chấm, chấm hỏi, chấm than
-    Giữ lại paragraph breaks (nhiều line breaks liên tiếp)
+    Làm sạch text: chỉ xuống dòng khi:
+    - Dòng kết thúc bằng dấu câu (.!?)
+    - VÀ dòng tiếp theo là dòng mới (có line break trong OCR output)
+    
+    Nếu dòng kết thúc bằng dấu câu nhưng vẫn có chữ sau đó trên cùng dòng → gộp lại
     """
     if not text:
         return ""
     
-    # Thay nhiều line breaks bằng một marker đặc biệt để giữ paragraph breaks
-    text = re.sub(r'\n{2,}', '\n\n__PARAGRAPH_BREAK__\n\n', text)
+    # Chia thành các dòng từ OCR output
+    lines = text.split('\n')
+    cleaned_lines = [line.rstrip() for line in lines]  # Xóa khoảng trắng cuối dòng
     
-    # Gộp tất cả line breaks đơn thành khoảng trắng
-    text = re.sub(r'\n+', ' ', text)
+    # Xóa các dòng trống ở đầu và cuối
+    while cleaned_lines and not cleaned_lines[0].strip():
+        cleaned_lines.pop(0)
+    while cleaned_lines and not cleaned_lines[-1].strip():
+        cleaned_lines.pop()
     
-    # Tách text thành các câu dựa trên dấu kết thúc câu
-    # Pattern: dấu chấm/chấm hỏi/chấm than + khoảng trắng + chữ hoa, hoặc cuối đoạn
-    sentences = re.split(r'([.!?])\s+', text)
-    
-    # Gộp lại: câu + dấu chấm + xuống dòng
+    # Xử lý: gộp các dòng không hết câu, chỉ giữ line break khi hết câu VÀ có line break trong OCR
     result = []
     i = 0
-    while i < len(sentences):
-        if i < len(sentences) - 1 and sentences[i+1] in ['.', '!', '?']:
-            # Có dấu kết thúc câu
-            sentence = sentences[i].strip()
-            punctuation = sentences[i+1]
-            if sentence:
-                result.append(sentence + punctuation)
-                # Xuống dòng sau dấu chấm
-                result.append('\n')
-            i += 2
-        else:
-            # Không có dấu kết thúc câu, giữ nguyên (có thể là phần cuối)
-            if sentences[i].strip():
-                result.append(sentences[i].strip())
+    
+    while i < len(cleaned_lines):
+        current_line = cleaned_lines[i].strip()
+        
+        if not current_line:
+            # Dòng trống: giữ nguyên (paragraph break)
+            result.append('')
             i += 1
+            continue
+        
+        # Bắt đầu với dòng hiện tại
+        merged_line = current_line
+        j = i + 1
+        
+        # Kiểm tra xem dòng hiện tại có kết thúc bằng dấu câu không
+        ends_with_punctuation = merged_line and merged_line[-1] in '.!?'
+        
+        # Nếu dòng kết thúc bằng dấu câu
+        if ends_with_punctuation:
+            # Kiểm tra dòng tiếp theo
+            if j < len(cleaned_lines) and cleaned_lines[j].strip():
+                # Có dòng tiếp theo (có line break trong OCR)
+                # → Ảnh gốc có line break ở đây → xuống dòng
+                result.append(merged_line)
+                i = j  # Nhảy đến dòng tiếp theo
+                continue
+            else:
+                # Không có dòng tiếp theo → dòng cuối cùng, giữ nguyên
+                result.append(merged_line)
+                i += 1
+                continue
+        
+        # Nếu dòng KHÔNG kết thúc bằng dấu câu → gộp với các dòng tiếp theo
+        while j < len(cleaned_lines):
+            next_line = cleaned_lines[j].strip()
+            
+            # Dừng nếu gặp dòng trống (paragraph break)
+            if not next_line:
+                break
+            
+            # Gộp dòng tiếp theo vào
+            merged_line = merged_line + ' ' + next_line
+            
+            # Kiểm tra xem dòng đã gộp có kết thúc bằng dấu câu chưa
+            if merged_line and merged_line[-1] in '.!?':
+                # Đã hết câu, kiểm tra dòng tiếp theo
+                if j + 1 < len(cleaned_lines) and cleaned_lines[j + 1].strip():
+                    # Có dòng tiếp theo (có line break trong OCR)
+                    # → Ảnh gốc có line break ở đây → xuống dòng
+                    break
+                else:
+                    # Không có dòng tiếp theo → dòng cuối cùng
+                    break
+            
+            j += 1
+        
+        # Thêm dòng đã gộp vào kết quả
+        result.append(merged_line)
+        i = j + 1  # Nhảy đến dòng tiếp theo chưa xử lý
     
-    # Gộp lại thành text
-    cleaned_text = ''.join(result)
+    # Xóa khoảng trắng thừa trong mỗi dòng (nhiều hơn 2 khoảng trắng liên tiếp)
+    result = [re.sub(r' {2,}', ' ', line) for line in result]
     
-    # Thay paragraph break marker thành 2 line breaks
-    cleaned_text = cleaned_text.replace('__PARAGRAPH_BREAK__', '')
-    
-    # Xóa line breaks thừa (nhiều hơn 2 line breaks liên tiếp)
-    cleaned_text = re.sub(r'\n{3,}', '\n\n', cleaned_text)
-    
-    # Xóa khoảng trắng thừa
-    cleaned_text = re.sub(r' +', ' ', cleaned_text)
-    
-    # Xóa line breaks ở đầu và cuối
-    cleaned_text = cleaned_text.strip()
+    # Gộp lại: giữ line break giữa các dòng
+    cleaned_text = '\n'.join(result)
     
     return cleaned_text
 

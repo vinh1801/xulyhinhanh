@@ -9,15 +9,10 @@ from PIL import Image, ImageEnhance, ImageFilter
 
 def preprocess_image_for_ocr(img, auto_invert=True):
     """
-    Tiền xử lý ảnh để cải thiện độ chính xác OCR
-    
-    Các bước xử lý:
-    1. Convert sang grayscale
-    2. Tự động phát hiện và đảo ngược màu nếu chữ sáng trên nền tối
-    3. Denoise (giảm nhiễu)
-    4. Tăng độ tương phản (CLAHE)
-    5. Adaptive Thresholding (chuyển sang binary)
-    6. Morphology operations (làm sạch văn bản)
+    Tiền xử lý ảnh đơn giản để OCR dễ đọc hơn
+    - Chữ tối nền sáng: giữ nguyên
+    - Chữ sáng nền tối: đảo lại
+    - Giữ nguyên bố cục, không làm mất chi tiết
     
     Args:
         img (PIL.Image): Ảnh đầu vào
@@ -29,82 +24,92 @@ def preprocess_image_for_ocr(img, auto_invert=True):
     # Convert PIL Image sang numpy array
     img_array = np.array(img)
     
-    # 1. Convert sang grayscale nếu là ảnh màu
+    # 1. Scale up ảnh nếu quá nhỏ (Tesseract hoạt động tốt hơn với ảnh lớn)
+    # Nhưng chỉ scale nếu thực sự cần, để giữ nguyên bố cục
+    width, height = img.size
+    if width < 300 or height < 300:
+        new_size = (width * 2, height * 2)
+        img = img.resize(new_size, Image.LANCZOS)
+        img_array = np.array(img)
+    
+    # 2. Convert sang grayscale nếu là ảnh màu
+    # Tesseract hoạt động tốt với grayscale
     if len(img_array.shape) == 3:
         gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
     else:
         gray = img_array
     
-    # 2. Tự động phát hiện và đảo ngược màu nếu chữ sáng trên nền tối
+    # 3. Tự động phát hiện và đảo ngược màu nếu chữ sáng trên nền tối
+    # Chỉ làm điều này để OCR có thể đọc được
     if auto_invert:
-        # Tính toán mean của pixel values
         mean_value = np.mean(gray)
-        # Nếu mean > 127 (nền sáng, chữ tối) thì không cần đảo
-        # Nếu mean < 127 (nền tối, chữ sáng) thì đảo ngược
+        # Nếu mean < 127: nền tối, chữ sáng -> cần đảo
+        # Nếu mean >= 127: nền sáng, chữ tối -> giữ nguyên
         if mean_value < 127:
             gray = cv2.bitwise_not(gray)  # Đảo ngược: chữ sáng -> chữ tối
     
-    # 3. Denoise: Giảm nhiễu bằng Median Blur
-    denoised = cv2.medianBlur(gray, 3)
-    
-    # 4. Tăng độ tương phản bằng CLAHE (trước khi thresholding)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(denoised)
-    
-    # 5. Adaptive Thresholding: Chuyển sang binary (đen-trắng)
-    # Sử dụng adaptive threshold để xử lý ảnh có ánh sáng không đều
-    binary = cv2.adaptiveThreshold(
-        enhanced, 
-        255,  # Max value
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,  # Adaptive method
-        cv2.THRESH_BINARY,  # Threshold type
-        11,  # block size - kích thước vùng để tính toán threshold
-        2    # C constant - giá trị trừ đi từ mean
-    )
-    
-    # 6. Morphology: Loại bỏ nhiễu nhỏ và làm đậm văn bản
-    kernel = np.ones((1, 1), np.uint8)
-    processed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    # KHÔNG làm gì thêm: không blur, không CLAHE, không thresholding, không morphology
+    # Để giữ nguyên bố cục và chi tiết của ảnh gốc
     
     # Convert lại sang PIL Image
-    processed_img = Image.fromarray(processed)
+    processed_img = Image.fromarray(gray)
+    
+    return processed_img
+
+
+def preprocess_image_gentle(img):
+    """
+    Tiền xử lý nhẹ nhàng - chỉ cải thiện chất lượng cơ bản
+    Phù hợp với ảnh đã có chất lượng tốt hoặc ảnh scan
+    """
+    img_array = np.array(img)
+    
+    # Scale up nếu ảnh nhỏ
+    width, height = img.size
+    if width < 300 or height < 300:
+        img = img.resize((width * 2, height * 2), Image.LANCZOS)
+        img_array = np.array(img)
+    
+    # Convert sang grayscale
+    if len(img_array.shape) == 3:
+        gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    else:
+        gray = img_array
+    
+    # Chỉ tăng độ tương phản nhẹ
+    clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+    
+    # Chuyển sang PIL Image
+    processed_img = Image.fromarray(enhanced)
     
     return processed_img
 
 
 def preprocess_image_for_ocr_advanced(img):
     """
-    Phiên bản nâng cao với nhiều phương pháp xử lý
-    
-    Thử nhiều cách và chọn kết quả tốt nhất
+    Phiên bản nâng cao: thử nhiều phương pháp và chọn tốt nhất
     """
-    results = []
+    # Phương pháp 1: Tiền xử lý nhẹ (khuyến nghị)
+    img1 = preprocess_image_gentle(img)
     
-    # Phương pháp 1: Không đảo màu
-    img1 = preprocess_image_for_ocr(img, auto_invert=False)
-    results.append(("Normal", img1))
-    
-    # Phương pháp 2: Tự động đảo màu
+    # Phương pháp 2: Tiền xử lý không binary
     img2 = preprocess_image_for_ocr(img, auto_invert=True)
-    results.append(("Auto-invert", img2))
     
-    # Phương pháp 3: Thử cả 2 và chọn dựa trên độ tương phản
-    # (Bạn có thể mở rộng để tự động chọn kết quả tốt nhất)
-    
-    # Trả về phương pháp auto-invert (thường tốt hơn)
+    # Trả về phương pháp đơn giản nhất
     return img2
 
 
 def preprocess_image_simple(img):
     """
     Phiên bản tiền xử lý đơn giản hơn (nếu không có OpenCV)
-    
-    Args:
-        img (PIL.Image): Ảnh đầu vào
-        
-    Returns:
-        PIL.Image: Ảnh đã được tiền xử lý
+    Chỉ làm những gì cần thiết: scale, grayscale, invert nếu cần
     """
+    # Scale up nếu ảnh nhỏ
+    width, height = img.size
+    if width < 300 or height < 300:
+        img = img.resize((width * 2, height * 2), Image.LANCZOS)
+    
     # Convert sang grayscale
     if img.mode != 'L':
         img = img.convert('L')
@@ -117,12 +122,6 @@ def preprocess_image_simple(img):
         img_array = 255 - img_array
         img = Image.fromarray(img_array)
     
-    # Tăng độ tương phản
-    from PIL import ImageEnhance
-    enhancer = ImageEnhance.Contrast(img)
-    img = enhancer.enhance(1.5)  # Tăng contrast 1.5 lần
-    
-    # Làm sắc nét
-    img = img.filter(ImageFilter.SHARPEN)
+    # KHÔNG làm gì thêm để giữ nguyên bố cục
     
     return img
