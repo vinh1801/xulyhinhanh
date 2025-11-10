@@ -6,7 +6,3 @@ __pycache__/
 .venv/
 env/
 venv/
-
-# OS junk
-.DS_Store
-Thumbs.db
