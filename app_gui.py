@@ -157,64 +157,109 @@ def process_image_and_translate():
             text_translated.insert(tk.END, f"Lỗi dịch: {e}\n\nCó thể do mất kết nối internet hoặc API Google Translate có vấn đề.")
 
 
+
 root = tk.Tk()
-root.title("Chương trình OCR và Dịch thuật")
-root.geometry("1000x650")
+root.title("Dịch Thuật Văn Bản Từ Hình Ảnh Nhóm 12")
+root.geometry("1150x720")
+root.configure(bg="#F0F0EE")
 root.resizable(False, False)
 
-style = ttk.Style(root)
+# ========= HEADER ==========
+header = tk.Frame(root, bg="#E5E5E3", height=90)
+header.pack(fill="x")
 
-style.theme_use('clam')
-
-main_frame = ttk.Frame(root, padding="10 10 10 10")
-main_frame.pack(fill="both", expand=True)
-
-main_frame.columnconfigure(0, weight=1)
-main_frame.columnconfigure(1, weight=1)
-main_frame.rowconfigure(0, weight=1)
-
-left_frame = ttk.Frame(main_frame, padding="10")
-left_frame.grid(row=0, column=0, sticky="nsew", padx=10)
-
-btn_load = ttk.Button(
-    left_frame,
-    text="📂 Chọn ảnh để trích xuất & dịch",
-    command=process_image_and_translate,
-    style="Accent.TButton"
+title = tk.Label(
+    header,
+    text="DỊCH THUẬT VĂN BẢN TỪ HÌNH ẢNH",
+    font=("Segoe UI", 22, "bold"),
+    bg="#E5E5E3",
+    fg="#333"
 )
-btn_load.pack(pady=10, fill="x", ipady=10)
+title.place(relx=0.5, rely=0.5, anchor="center")
 
-style.configure("Accent.TButton", font=("Arial", 12, "bold"), foreground="white", background="#4CAF50")
-style.map("Accent.TButton",
-          background=[('active', '#45a049')]
-          )
 
-image_label = ttk.Label(
+# ========= MAIN FRAME ==========
+main_container = tk.Frame(root, bg="#F0F0EE")
+main_container.pack(fill="both", expand=True, pady=10)
+
+# Căn giữa nội dung
+main_container.grid_rowconfigure(0, weight=1)
+main_container.grid_columnconfigure(0, weight=1)
+
+main_frame = tk.Frame(main_container, bg="#F0F0EE")
+main_frame.grid(row=0, column=0)
+
+# Set tỉ lệ để trái & phải cân đối
+main_frame.grid_rowconfigure(0, weight=1)
+main_frame.grid_columnconfigure(0, weight=1)
+main_frame.grid_columnconfigure(1, weight=1)
+
+# ========= LEFT AREA (IMAGE + BUTTON) ==========
+left_frame = tk.Frame(main_frame, bg="#F0F0EE")
+left_frame.grid(row=0, column=0, sticky="nsew", padx=30, pady=20)
+
+btn_load = tk.Button(
+    left_frame,
+    text="📂  Chọn ảnh để trích xuất & dịch",
+    command=process_image_and_translate,
+    bg="#4A90E2",
+    fg="white",
+    font=("Segoe UI", 12, "bold"),
+    relief="flat",
+    padx=10,
+    pady=8
+)
+btn_load.pack(pady=(0, 20), fill="x")
+
+image_label = tk.Label(
     left_frame,
     text="Chưa chọn ảnh",
-    anchor="center",
-    background="#ffffff",
+    bg="white",
+    fg="#555",
     relief="solid",
-    borderwidth=1
+    borderwidth=1,
+    font=("Segoe UI", 10),
+    width=45,
+    height=20
 )
-image_label.pack(pady=10, fill="both", expand=True)
+image_label.pack(fill="both", expand=True)
 
-right_frame = ttk.Frame(main_frame)
-right_frame.grid(row=0, column=1, sticky="nsew", padx=10)
+
+# ========= RIGHT AREA (NOTEBOOK) ==========
+right_frame = tk.Frame(main_frame, bg="#F0F0EE")
+right_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
 
 notebook = ttk.Notebook(right_frame)
-notebook.pack(fill="both", expand=True, pady=10)
+notebook.pack(fill="both", expand=True)
 
-tab_original = ttk.Frame(notebook, padding="10")
-notebook.add(tab_original, text='📝 Văn bản gốc (OCR)')
+# STYLE TAB
+style = ttk.Style()
+style.theme_use("clam")
 
-text_original = ScrolledText(tab_original, height=15, width=60, wrap="word", font=("Arial", 10))
-text_original.pack(fill="both", expand=True)
+style.configure(
+    "TNotebook.Tab",
+    padding=[15, 8],
+    font=("Segoe UI", 11),
+)
+style.map(
+    "TNotebook.Tab",
+    background=[("selected", "#ffffff")],
+    foreground=[("selected", "#000")]
+)
 
-tab_translated = ttk.Frame(notebook, padding="10")
-notebook.add(tab_translated, text='🌐 Bản dịch tiếng Việt')
+# Tabs
+tab_original = ttk.Frame(notebook)
+tab_translated = ttk.Frame(notebook)
 
-text_translated = ScrolledText(tab_translated, height=15, width=60, wrap="word", font=("Arial", 10), bg="#f9f9f9")
-text_translated.pack(fill="both", expand=True)
+notebook.add(tab_original, text="📝  Văn bản gốc (OCR)")
+notebook.add(tab_translated, text="🌐  Bản dịch tiếng Việt")
+
+text_original = ScrolledText(tab_original, wrap="word",
+                             font=("Segoe UI", 10), bg="#ffffff")
+text_original.pack(fill="both", expand=True, padx=12, pady=12)
+
+text_translated = ScrolledText(tab_translated, wrap="word",
+                               font=("Segoe UI", 10), bg="#ffffff")
+text_translated.pack(fill="both", expand=True, padx=12, pady=12)
 
 root.mainloop()
